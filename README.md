@@ -16,7 +16,5 @@ It provides a responsive and clean UI for displaying products with multiple imag
 - **HTML5 / CSS3**  
 - **JavaScript (ES6+)**  
 
-## 📷 Screenshots
-(<img width="1310" height="656" alt="Screenshot 2025-08-30 161706" src="https://github.com/user-attachments/assets/d89cd065-e7e0-463a-a6e4-38f2d522e96a" />
-)
+
 
