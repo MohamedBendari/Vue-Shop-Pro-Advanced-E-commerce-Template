@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Vue Shop Pro — Advanced</title>
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <!-- Vue.js -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <style>
+    :root{
+      --brand1:#097786; --brand2:#f891cf; --bg:#c9cbd2;
+    }
+    body{ background:var(--bg); font-family:system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,"Helvetica Neue",Arial; }
+    .navbar{ background:linear-gradient(90deg,var(--brand1),var(--brand2)); }
+    .brand{ font-weight:800; letter-spacing:.3px; }
+    .card{ border:none; border-radius:16px; box-shadow:0 6px 20px rgba(0,0,0,.08); transition:transform .18s ease, box-shadow .18s ease; }
+    .card:hover{ transform:translateY(-4px); box-shadow:0 10px 26px rgba(0,0,0,.12); }
+    .card img{ height:210px; object-fit:cover; border-top-left-radius:16px; border-top-right-radius:16px; }
+    .btn-gradient{ background:linear-gradient(90deg,var(--brand1),var(--brand2)); border:none; color:#fff; font-weight:600; }
+    .btn-gradient:hover{ filter:brightness(.95); }
+    .out-of-stock{ color:#9aa0a6; text-decoration:line-through; }
+    .price{ font-weight:700; }
+    .rating{ letter-spacing:.5px; }
+    .filters .form-control, .filters .form-select{ border-radius:12px; }
+    .toast-container{ z-index:1080; }
+    .table thead{ background:var(--brand1); color:#fff; }
+    .modal-content{ border-radius:18px; }
+    .badge-dot{ width:10px; height:10px; display:inline-block; border-radius:50%; margin-right:6px; }
+    footer{ color:#6c757d; }
+  </style>
+</head>
+<body>
+<div id="app" class="container py-4">
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg mb-4 shadow-sm rounded-3">
+    <div class="container-fluid">
+      <a class="navbar-brand text-white brand" href="#">Vue Shop Pro</a>
+
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div id="navContent" class="collapse navbar-collapse">
+        <form class="d-flex ms-auto me-3 my-2 my-lg-0" role="search" @submit.prevent>
+          <input class="form-control me-2" v-model="searchQuery" type="search" placeholder="Search products…" />
+        </form>
+
+        <button class="btn btn-light position-relative" data-bs-toggle="modal" data-bs-target="#cartModal">
+          🛒
+          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ cartCount }}</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Discount Banner -->
+  <div v-if="discount > 0" class="alert alert-info d-flex align-items-center justify-content-between shadow-sm" role="alert">
+    <div>
+      🎉 Special Offer: <strong>{{ discount }}%</strong> off on selected items!
+    </div>
+    <div class="flex-grow-1 ms-3">
+      <div class="progress" role="progressbar" aria-label="Discount progress" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="discount">
+        <div class="progress-bar" :style="{ width: discount + '%' }">{{ discount }}%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters Row -->
+  <div class="row g-3 filters align-items-end mb-3">
+    <div class="col-12 col-md-3">
+      <label class="form-label">Category</label>
+      <select class="form-select" v-model="category">
+        <option value="all">All</option>
+        <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
+      </select>
+    </div>
+    <div class="col-12 col-md-3">
+      <label class="form-label">Price</label>
+      <select class="form-select" v-model="priceFilter">
+        <option value="all">All Prices</option>
+        <option value="low">Below $100</option>
+        <option value="mid">$100 – $500</option>
+        <option value="high">Above $500</option>
+      </select>
+    </div>
+    <div class="col-12 col-md-3">
+      <label class="form-label">Sort By</label>
+      <select class="form-select" v-model="sortBy">
+        <option value="name-asc">Name (A → Z)</option>
+        <option value="name-desc">Name (Z → A)</option>
+        <option value="price-asc">Price (Low → High)</option>
+        <option value="price-desc">Price (High → Low)</option>
+        <option value="rating-desc">Rating (High → Low)</option>
+      </select>
+    </div>
+    <div class="col-12 col-md-3">
+      <div class="form-check mb-2">
+        <input id="stockOnly" class="form-check-input" type="checkbox" v-model="stockOnly">
+        <label class="form-check-label" for="stockOnly">Show only in stock</label>
+      </div>
+      <button class="btn btn-outline-secondary btn-sm" @click="resetFilters">Reset Filters</button>
+    </div>
+  </div>
+
+  <!-- Toggle Products -->
+  <div class="text-center mb-3">
+    <button class="btn btn-gradient px-4 py-2 rounded-pill" @click="showProducts = !showProducts">
+      {{ showProducts ? 'Hide Products' : 'Show Products' }}
+    </button>
+  </div>
+
+  <!-- Product Grid -->
+  <div v-show="showProducts">
+    <div v-if="filteredAndSorted.length > 0" class="row g-4">
+      <div class="col-12 col-md-6 col-lg-4" v-for="product in filteredAndSorted" :key="product.id">
+        <div class="card h-100">
+          <img :src="product.image" class="card-img-top" :alt="product.name" @error="onImgError($event)"/>
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start">
+              <h5 :class="{ 'out-of-stock': !product.inStock }" class="mb-1">{{ product.name }}</h5>
+              <span class="badge text-bg-light">{{ product.category }}</span>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <span class="price">${{ product.price }}</span>
+              <small class="text-muted rating">{{ starString(product.rating) }}</small>
+            </div>
+
+            <!-- Stock status -->
+            <p v-if="product.inStock" class="text-success mb-1"><span class="badge-dot bg-success"></span>In Stock</p>
+            <p v-else-if="product.price < 50" class="text-warning mb-1"><span class="badge-dot bg-warning"></span>Limited Stock</p>
+            <p v-else class="text-danger mb-1"><span class="badge-dot bg-danger"></span>Out of Stock</p>
+
+            <p class="small text-muted mb-0">{{ product.description }}</p>
+          </div>
+          <div class="card-footer bg-white border-0 p-3">
+            <button class="btn btn-gradient w-100" :disabled="!product.inStock" @click="addToCart(product)">Add to Cart</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- No products found -->
+    <div v-else class="alert alert-warning text-center shadow-sm">
+      🚫 No products found
+    </div>
+  </div>
+
+  <!-- Cart Summary Sticky -->
+  <div class="mt-4">
+    <div class="card p-3 shadow-sm">
+      <div class="d-flex flex-wrap justify-content-between align-items-center">
+        <div><strong>Items:</strong> {{ cartCount }} | <strong>Subtotal:</strong> ${{ subtotal.toFixed(2) }} | <strong>Shipping:</strong> ${{ shipping.toFixed(2) }}</div>
+        <div class="text-end"><strong>Grand Total:</strong> ${{ grandTotal.toFixed(2) }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cart Modal -->
+  <div class="modal fade" id="cartModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content shadow-lg">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title">🛒 Your Cart</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div v-if="cartItems.length > 0">
+            <table class="table table-bordered text-center align-middle">
+              <thead>
+                <tr>
+                  <th style="width:35%">Product</th>
+                  <th style="width:15%">Price</th>
+                  <th style="width:25%">Qty</th>
+                  <th style="width:15%">Subtotal</th>
+                  <th style="width:10%"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in cartItems" :key="item.id">
+                  <td class="text-start">
+                    <div class="fw-semibold">{{ item.name }}</div>
+                    <small class="text-muted">{{ item.category }}</small>
+                  </td>
+                  <td>${{ item.price }}</td>
+                  <td>
+                    <div class="btn-group" role="group">
+                      <button class="btn btn-sm btn-outline-secondary" @click="decreaseQty(item)">−</button>
+                      <button class="btn btn-sm btn-light" disabled>{{ item.quantity }}</button>
+                      <button class="btn btn-sm btn-outline-secondary" @click="increaseQty(item)">+</button>
+                    </div>
+                  </td>
+                  <td>${{ (item.price * item.quantity).toFixed(2) }}</td>
+                  <td>
+                    <button class="btn btn-sm btn-outline-danger" @click="removeFromCart(item)">Remove</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="d-flex justify-content-between align-items-center mt-3">
+              <button class="btn btn-outline-danger" @click="clearCart">Clear Cart</button>
+              <div class="text-end">
+                <div><strong>Subtotal:</strong> ${{ subtotal.toFixed(2) }}</div>
+                <div v-if="discount > 0"><strong>Discount ({{ discount }}%):</strong> −${{ discountAmount.toFixed(2) }}</div>
+                <div><strong>Shipping:</strong> ${{ shipping.toFixed(2) }}</div>
+                <h5 class="mt-2">Grand Total: ${{ grandTotal.toFixed(2) }}</h5>
+              </div>
+            </div>
+          </div>
+          <div v-else class="alert alert-warning text-center shadow-sm">
+            🛒 Your cart is empty
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="text-center mt-5 py-4">
+    <p> Mohamed Bendary</p>
+    <small>© {{ new Date().getFullYear() }} Vue Shop Pro. Built with Vue 3 + Bootstrap 5.</small>
+    
+  </footer>
+
+  <!-- Toast (for Add to Cart) -->
+  <div class="toast-container position-fixed top-0 end-0 p-3">
+    <div id="addToast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="1800">
+      <div class="d-flex">
+        <div class="toast-body">
+          ✅ Added to cart
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+const { createApp } = Vue;
+
+createApp({
+  data(){
+    return {
+      showProducts: true,
+      searchQuery: "",
+      category: "all",
+      priceFilter: "all",
+      stockOnly: false,
+      sortBy: "rating-desc",
+
+      discount: 10,
+      shippingFlat: 20,
+
+      cartItems: [],
+
+      products: [
+        {id:1,name:"MacBook Pro",price:1800,inStock:true,description:"Powerful laptop with M2 chip.",category:"Electronics",rating:5,image:"https://picsum.photos/seed/macbook/400/200"},
+        {id:2,name:"Sony Headphones",price:45,inStock:false,description:"Noise-cancelling over-ear headphones.",category:"Audio",rating:4,image:"https://picsum.photos/seed/headphones/400/200"},
+        {id:3,name:"iPhone 15",price:999,inStock:true,description:"Latest Apple iPhone with A17 chip.",category:"Electronics",rating:5,image:"https://picsum.photos/seed/iphone/400/200"},
+        {id:4,name:"Smart Watch",price:250,inStock:true,description:"Fitness and health tracking smartwatch.",category:"Wearables",rating:4,image:"https://picsum.photos/seed/smartwatch/400/200"},
+        {id:5,name:"Gaming Mouse",price:60,inStock:true,description:"RGB wired gaming mouse.",category:"Accessories",rating:4,image:"https://picsum.photos/seed/mouse/400/200"},
+        {id:6,name:"Bluetooth Speaker",price:35,inStock:false,description:"Portable waterproof speaker.",category:"Audio",rating:3,image:"https://picsum.photos/seed/speaker/400/200"}
+      ]
+    }
+  },
+  computed: {
+    cartCount() {
+      return this.cartItems.reduce((sum, item) => sum + item.quantity, 0);
+    },
+    subtotal() {
+      return this.cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    },
+    discountAmount() {
+      return (this.subtotal * this.discount) / 100;
+    },
+    shipping() {
+      return this.cartItems.length > 0 ? this.shippingFlat : 0;
+    },
+    grandTotal() {
+      return this.subtotal - this.discountAmount + this.shipping;
+    },
+    filteredAndSorted() {
+      let list = [...this.products];
+      if (this.searchQuery) list = list.filter(p => p.name.toLowerCase().includes(this.searchQuery.toLowerCase()));
+      if (this.category !== "all") list = list.filter(p => p.category === this.category);
+      if (this.priceFilter === "low") list = list.filter(p => p.price < 100);
+      else if (this.priceFilter === "mid") list = list.filter(p => p.price >= 100 && p.price <= 500);
+      else if (this.priceFilter === "high") list = list.filter(p => p.price > 500);
+      if (this.stockOnly) list = list.filter(p => p.inStock);
+      if (this.sortBy === "name-asc") list.sort((a, b) => a.name.localeCompare(b.name));
+      if (this.sortBy === "name-desc") list.sort((a, b) => b.name.localeCompare(a.name));
+      if (this.sortBy === "price-asc") list.sort((a, b) => a.price - b.price);
+      if (this.sortBy === "price-desc") list.sort((a, b) => b.price - a.price);
+      if (this.sortBy === "rating-desc") list.sort((a, b) => b.rating - a.rating);
+      return list;
+    },
+    categories() {
+      return [...new Set(this.products.map(p => p.category))];
+    }
+  },
+  methods: {
+    addToCart(product) {
+      const existing = this.cartItems.find(item => item.id === product.id);
+      if (existing) existing.quantity++;
+      else this.cartItems.push({ ...product, quantity: 1 });
+      const toast = new bootstrap.Toast(document.getElementById('addToast'));
+      toast.show();
+    },
+    increaseQty(item) {
+      item.quantity++;
+    },
+    decreaseQty(item) {
+      if (item.quantity > 1) item.quantity--;
+      else this.removeFromCart(item);
+    },
+    removeFromCart(item) {
+      this.cartItems = this.cartItems.filter(p => p.id !== item.id);
+    },
+    clearCart() {
+      this.cartItems = [];
+    },
+    resetFilters() {
+      this.searchQuery = "";
+      this.category = "all";
+      this.priceFilter = "all";
+      this.stockOnly = false;
+      this.sortBy = "rating-desc";
+    },
+    starString(rating) {
+      return "★".repeat(rating) + "☆".repeat(5 - rating);
+    },
+    onImgError(e) {
+      e.target.src = "https://via.placeholder.com/400x200?text=No+Image";
+    }
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
